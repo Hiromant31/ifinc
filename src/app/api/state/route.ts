@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put, head, list, getDownloadUrl } from '@vercel/blob';
+import { put, list, getDownloadUrl } from '@vercel/blob';
 
 const PATHNAME = 'state.json';
+
+// никогда не выполнять роут во время сборки
+export const dynamic = 'force-dynamic';
 
 /**
  * PUT /api/state — upload state to Vercel Blob
