@@ -193,13 +193,15 @@ export default function GoalsScreen(p: Props) {
         <div className="sp" />
         <button type="button" className="btn sm" onClick={p.onToggleShelf}>{p.shelfOpen ? '▲ Свернуть' : '▼ Развернуть'}</button>
       </div>
-      <div className="done-shelf" hidden={!p.shelfOpen}>
-        {done.length
-          ? done.map(d => (
-            <div key={d.id} className="trophy">{d.icon} {d.name.toUpperCase()} <small>{d2(d.doneAt)}</small></div>
-          ))
-          : <div className="empty" style={{ width: '100%' }}>ПОЛКА ПУСТА — ИСПОЛНИ ПЕРВУЮ ЦЕЛЬ</div>}
-      </div>
+      {p.shelfOpen && (
+        <div className="done-shelf">
+          {done.length
+            ? done.map(d => (
+              <div key={d.id} className="trophy">{d.icon} {d.name.toUpperCase()} <small>{d2(d.doneAt)}</small></div>
+            ))
+            : <div className="empty" style={{ width: '100%' }}>ПОЛКА ПУСТА — ИСПОЛНИ ПЕРВУЮ ЦЕЛЬ</div>}
+        </div>
+      )}
     </section>
   );
 }
