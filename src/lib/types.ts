@@ -26,6 +26,9 @@ export interface Goal {
   created: number;
   fundedAt: number | null;
   doneAt: number | null;
+  /** циклические обяз. цели: якорь последнего обновления и дата следующего */
+  anchor?: number | null;
+  cycleEnd?: number | null;
 }
 
 export interface Task {

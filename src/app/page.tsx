@@ -21,6 +21,7 @@ import MenuSheet from '@/components/sheets/MenuSheet';
 import HabitSheet, { type HabitDraft } from '@/components/sheets/HabitSheet';
 import RewardSheet, { type RewardDraft } from '@/components/sheets/RewardSheet';
 import { LVL_BONUS, MILES, unlockTiedRewards, todayS, yestS } from '@/lib/growth';
+import { syncCycles } from '@/lib/cycle';
 
 type Tab = 'goals' | 'fin' | 'grow';
 type SheetKind = 'tx' | 'goal' | 'amount' | 'adjust' | 'menu' | 'habit' | 'reward' | null;
@@ -256,14 +257,33 @@ export default function Page() {
         id: uid(), type: 'out', amount: gg.saved, cat: 'Цели',
         note: 'исполнена: ' + gg.name, ts: Date.now(), virtual: true,
       });
-      gainXp(s, 100); boom(220); setShelfOpen(true);
+      gainXp(s, 100);
       for (const name of unlockTiedRewards(s, gg)) {
         toast('🎁 «' + name.toUpperCase() + '» РАЗБЛОКИРОВАНА ЦЕЛЬЮ!', 'gold');
       }
-      toast('🏆 ЦЕЛЬ «' + gg.name + '» ИСПОЛНЕНА · РАСХОД ЗАПИСАН', 'gold');
+      if (gg.cat === 'req') {
+        // обязательная циклическая — остаётся в списке до даты обновления
+        boom(120);
+        toast('✔ «' + gg.name.toUpperCase() + '» ИСПОЛНЕНА · ЦИКЛ ПРОДОЛЖАЕТСЯ', 'gold');
+      } else {
+        boom(220); setShelfOpen(true);
+        toast('🏆 ЦЕЛЬ «' + gg.name + '» ИСПОЛНЕНА · РАСХОД ЗАПИСАН', 'gold');
+      }
       return s;
     });
   }
+
+  /* ---------- автообновление циклов обязательных целей ---------- */
+  useEffect(() => {
+    if (!booted || !state.goals.length) return;
+    const before = JSON.stringify(state.goals);
+    const s = clone(state);
+    const { changed, renewedNames } = syncCycles(s);
+    for (const n of renewedNames) toast('🔄 «' + n.toUpperCase() + '» ОБНОВИЛАСЬ — НОВЫЙ ЦИКЛ ОТКРЫТ', 'green');
+    // пишем только если что-то реально изменилось (иначе бесконечный ре-рендер)
+    if (changed || JSON.stringify(s.goals) !== before) setState(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, booted]);
 
   function deleteGoal(id: string) {
     setState(prev => {

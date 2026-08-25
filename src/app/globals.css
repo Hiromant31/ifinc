@@ -1037,6 +1037,15 @@ footer {
 .ck input{width:16px;height:16px;accent-color:var(--acc);flex:none}
 .btn.gold{background:var(--acc);border-color:var(--ink);color:var(--cream)}
 
+/* === ЦИКЛИЧНЫЕ ОБЯЗАТЕЛЬНЫЕ ЦЕЛИ (patch v3) === */
+.goal.due{border-color:var(--acc);animation:dueP 1.5s ease infinite}
+@keyframes dueP{
+  0%,100%{box-shadow:0 0 0 1px var(--acc),0 0 6px rgba(210,105,74,.25)}
+  50%{box-shadow:0 0 0 1px var(--acc),0 0 20px rgba(210,105,74,.55)}
+}
+.goal.reqdone{opacity:.62}
+.goal.reqdone:hover{opacity:.85}
+
 @keyframes toastOut {
   to {
     opacity: 0;
