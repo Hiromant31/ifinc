@@ -1026,6 +1026,17 @@ footer {
   text-align: center;
 }
 
+/* === РОСТ v2 === */
+.chips-row{display:flex;gap:7px;flex-wrap:wrap}
+.chips-row button{border:1px solid var(--ink);background:transparent;padding:10px;padding:10px 10px;font:700 9px var(--sans);letter-spacing:.12em;color:var(--dim)}
+.chips-row button.sel{background:var(--ink);color:var(--bg)}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.winrow{display:flex;gap:8px}
+.winrow input{flex:1}
+.ck{display:flex;align-items:center;gap:8px;font:600 10px var(--sans);letter-spacing:.12em;color:var(--dim)}
+.ck input{width:16px;height:16px;accent-color:var(--acc);flex:none}
+.btn.gold{background:var(--acc);border-color:var(--ink);color:var(--cream)}
+
 @keyframes toastOut {
   to {
     opacity: 0;

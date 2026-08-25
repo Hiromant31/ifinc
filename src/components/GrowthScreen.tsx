@@ -2,139 +2,127 @@
 
 import { useState } from 'react';
 import type { State } from '@/lib/types';
-import { fmt, esc } from '@/lib/format';
-import { SKILLS } from '@/lib/constants';
+import { fmt } from '@/lib/format';
+import { levelInfo } from '@/lib/level';
+import {
+  EFFORTS, SIZES, MILES,
+  effStreak, nextMile, daysPreview, inWindow, sizeLabel, todayS,
+} from '@/lib/growth';
 
 interface Props {
   state: State;
-  onAddIdea: (title: string, reward: number) => void;
-  onAddTask: (ideaId: string, text: string) => void;
-  onToggleTask: (ideaId: string, taskId: string, done: boolean) => void;
-  onDeleteTask: (ideaId: string, taskId: string) => void;
-  onIdeaSuccess: (ideaId: string) => void;
-  onDeleteIdea: (id: string) => void;
-  onBuySkill: (id: string) => void;
-}
-
-function levelInfo(xp: number) {
-  let lvl = 1, need = 150, rem = xp;
-  while (rem >= need) { rem -= need; lvl++; need = Math.round(150 * Math.pow(lvl, 1.35)); }
-  return { lvl, cur: rem, need };
+  onOpenHabit: () => void;
+  onOpenReward: () => void;
+  onCheckHabit: (id: string) => void;
+  onDeleteHabit: (id: string) => void;
+  onClaimReward: (id: string) => void;
+  onDeleteReward: (id: string) => void;
 }
 
 export default function GrowthScreen(p: Props) {
-  const [title, setTitle] = useState('');
-  const [reward, setReward] = useState('20');
-  const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
-
-  const li = levelInfo(p.state.xp);
-  const mult = 1 + 0.15 * p.state.skills.length;
+  const s = p.state;
+  const li = levelInfo(s.xp);
 
   return (
     <section id="screenGrow">
       <div className="xpblock">
-        <div className="lrow"><b>LVL {li.lvl}</b><b>INT {Math.round(p.state.intel)}</b></div>
+        <div className="lrow"><b>LVL {li.lvl}</b><b>⭐ {fmt(s.pts)}</b></div>
         <div className="hbar"><div className="hbar-fill" style={{ width: Math.min(100, li.cur / li.need * 100) + '%' }} /></div>
-        <div className="xptxt">{fmt(li.cur)} / {fmt(li.need)} XP · БУСТ ×{Math.round(mult * 100) / 100}</div>
+        <div className="xptxt">{fmt(li.cur)} / {fmt(li.need)} XP</div>
+        <div className="xptxt" style={{ marginTop: 4 }}>
+          XP — ИЗ ЛЮБЫХ ДЕЙСТВИЙ → УРОВЕНЬ · LEVEL UP = +3⭐ · ⭐ — ТОЛЬКО ПРИВЫЧКИ, СТРИКИ И НАГРАДЫ
+        </div>
       </div>
 
-      <div className="shead"><h2>ИДЕИ И ТЕСТЫ</h2></div>
-      <form
-        className="stack"
-        autoComplete="off"
-        style={{ marginBottom: 14 }}
-        onSubmit={e => {
-          e.preventDefault();
-          const t = title.trim();
-          if (!t) return;
-          p.onAddIdea(t, Math.max(1, parseInt(reward || '20', 10) || 20));
-          setTitle('');
-        }}
-      >
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="НОВАЯ ИДЕЯ / ГИПОТЕЗА…" />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input value={reward} onChange={e => setReward(e.target.value)} inputMode="numeric" style={{ maxWidth: 74 }} />
-          <button type="submit" className="btn ink" style={{ flex: 1 }}>Записать идею</button>
-        </div>
-      </form>
-
-      <div id="ideaList">
-        {p.state.ideas.length === 0 && (
-          <div className="empty">ЗАПИШИ ПЕРВУЮ ИДЕЮ — ЗА УСПЕШНЫЕ ТЕСТЫ КАПАЕТ INT</div>
+      <div className="shead">
+        <h2>ПРИВЫЧКИ</h2><span className="hint">⭐ ЗА ОТМЕТКУ</span>
+        <div className="sp" />
+        <button type="button" className="btn sm acc" onClick={p.onOpenHabit}>＋ Привычка</button>
+      </div>
+      <div id="habitList">
+        {s.habits.length === 0 && (
+          <div className="empty">ДОБАВЬ ПРИВЫЧКУ — ОДНА КНОПКА «ОТМЕТИТЬСЯ» В ДЕНЬ</div>
         )}
-        {p.state.ideas.map(it => {
-          const doneN = it.tasks.filter(t => t.done).length;
-          const pctI = it.tasks.length ? doneN / it.tasks.length * 100 : 0;
+        {s.habits.map(h => {
+          const st = effStreak(h);
+          const nm = nextMile(st);
+          const wPct = nm ? Math.min(100, st / nm[0] * 100) : 100;
+          const winOn = !!h.from && !!h.to;
+          const winNow = inWindow(h);
+          const done = h.lastCheck === todayS();
+          const hint = nm ? ('ДО БОНУСА +' + nm[1] + '⭐: ' + (nm[0] - st) + ' ДН') : 'ВСЕ БОНУСЫ СТРИКА СОБРАНЫ';
           return (
-            <article key={it.id} className="idea">
+            <article key={h.id} className="goal">
               <header>
-                <b>💡 {esc(it.title)}</b>
-                {it.success
-                  ? <span className="tag acc">✔ УСПЕШНЫЙ ТЕСТ</span>
-                  : <button type="button" className="btn mini acc" onClick={() => p.onIdeaSuccess(it.id)}>🧪 Успех +{it.reward} INT</button>}
-                <button type="button" style={{ border: 'none', background: 'none', color: 'var(--dim)', padding: 6 }} onClick={() => p.onDeleteIdea(it.id)}>✕</button>
+                <span className="g-ico">🔁</span>
+                <b>{h.name}</b>
+                <span className="tag dim2">×{h.effort}⭐</span>
+                {winOn && <span className="tag dim2">{h.from}–{h.to}</span>}
+                <span className="tag ink">🔥 {st}</span>
               </header>
-              <div className="hbar thin"><div className="hbar-fill" style={{ width: pctI + '%' }} /></div>
-              <div style={{ marginTop: 8 }}>
-                {it.tasks.length === 0 && <div className="empty" style={{ marginTop: 2 }}>ЗАДАЧ НЕТ — ДОБАВЬ ШАГИ ПРОГРЕССА</div>}
-                {it.tasks.map(t => (
-                  <div key={t.id} className="task-row">
-                    <label className="task">
-                      <input
-                        type="checkbox"
-                        checked={t.done}
-                        onChange={e => p.onToggleTask(it.id, t.id, e.target.checked)}
-                      />
-                      <span>{esc(t.text)}</span>
-                    </label>
-                    <button type="button" style={{ border: 'none', background: 'none', color: 'var(--dim)', padding: 6 }}
-                      onClick={() => p.onDeleteTask(it.id, t.id)}>✕</button>
-                  </div>
-                ))}
+              <div className="hbar thin"><div className="hbar-fill" style={{ width: wPct + '%' }} /></div>
+              <div className="row2">
+                <span>{hint}</span>
+                <span>{done ? 'СЕГОДНЯ ✔' : 'СЕГОДНЯ —'}</span>
               </div>
-              <div className="i-add">
-                <input
-                  placeholder="НОВАЯ ЗАДАЧА (+5 INT)"
-                  value={taskInputs[it.id] || ''}
-                  onChange={e => setTaskInputs(s => ({ ...s, [it.id]: e.target.value }))}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const v = (taskInputs[it.id] || '').trim();
-                      if (!v) return;
-                      p.onAddTask(it.id, v);
-                      setTaskInputs(s => ({ ...s, [it.id]: '' }));
-                    }
-                  }}
-                />
-                <button type="button" className="sq" onClick={() => {
-                  const v = (taskInputs[it.id] || '').trim();
-                  if (!v) return;
-                  p.onAddTask(it.id, v);
-                  setTaskInputs(s => ({ ...s, [it.id]: '' }));
-                }}>＋</button>
+              <div className="acts">
+                {done
+                  ? <button type="button" className="btn ink" disabled>✔ Отмечено</button>
+                  : (winOn && !winNow
+                    ? <button type="button" className="btn" disabled>Окно {h.from}–{h.to}</button>
+                    : <button type="button" className="btn acc" onClick={() => p.onCheckHabit(h.id)}>✔ Отметиться +{h.effort}⭐</button>)}
+                <button type="button" className="sq" onClick={() => p.onDeleteHabit(h.id)}>✕</button>
               </div>
             </article>
           );
         })}
       </div>
 
-      <div className="shead"><h2>ДЕРЕВО НАВЫКОВ</h2></div>
-      <div className="skill-grid">
-        {SKILLS.map(s => {
-          const owned = p.state.skills.includes(s.id);
-          const locked = !owned && p.state.intel < s.cost;
+      <div className="shead">
+        <h2>НАГРАДЫ</h2><span className="hint">ТРАТИШЬ ⭐ ИЛИ ПРИВЯЖИ К ЦЕЛИ</span>
+        <div className="sp" />
+        <button type="button" className="btn sm ink" onClick={p.onOpenReward}>＋ Награда</button>
+      </div>
+      <div id="rewardList">
+        {s.rewards.length === 0 && (
+          <div className="empty">ПРИДУМАЙ СЕБЕ ПРИЗ — ИГРА САМА ПОДСКАЖЕТ ЦЕНУ</div>
+        )}
+        {s.rewards.map(r => {
+          const need = Math.max(0, r.cost - s.pts);
+          const fg = s.goals.find(g => g.id === r.tied);
+          const claimable = r.unlocked || s.pts >= r.cost;
           return (
-            <div key={s.id} className={'skill' + (owned ? ' owned' : '') + (locked ? ' locked' : '')}>
-              <span className="s-ico">{s.icon}</span>
-              <b>{esc(s.name).toUpperCase()}</b>
-              <p>{esc(s.desc)}</p>
-              {owned
-                ? <span className="tag acc">ИЗУЧЕНО</span>
-                : <button type="button" className="btn mini" onClick={() => p.onBuySkill(s.id)}>INT {s.cost}</button>}
-            </div>
+            <article key={r.id} className={'goal' + (claimable ? ' funded' : '')}>
+              <header>
+                <span className="g-ico">🎁</span>
+                <b>{r.name}</b>
+                <span className="tag dim2">{sizeLabel(r.size)} · {r.cost}⭐</span>
+                {fg && <span className="tag dim2">🎯 {fg.name}</span>}
+                {r.unlocked && <span className="tag acc">РАЗБЛОКИРОВАНА</span>}
+              </header>
+              <div className={'hbar' + (claimable ? ' acc' : '')}>
+                <div className="hbar-fill" style={{ width: Math.min(100, s.pts / r.cost * 100) + '%' }} />
+              </div>
+              <div className="row2">
+                <span><b>{fmt(Math.min(s.pts, r.cost))}</b> ИЗ {r.cost}⭐</span>
+                <span>{daysPreview(need, s.ptLog)}{r.claimed ? ' · ПОЛУЧЕНО ×' + r.claimed : ''}</span>
+              </div>
+              <div className="acts">
+                {r.unlocked
+                  ? <button type="button" className="btn gold" onClick={() => p.onClaimReward(r.id)}>🎁 Забрать (цель)</button>
+                  : (s.pts >= r.cost
+                    ? <button type="button" className="btn gold" onClick={() => p.onClaimReward(r.id)}>🎁 Забрать</button>
+                    : <button type="button" className="btn" disabled>🎁 {fmt(s.pts)}/{r.cost}⭐</button>)}
+                <button type="button" className="sq" onClick={() => p.onDeleteReward(r.id)}>✕</button>
+              </div>
+            </article>
           );
         })}
+      </div>
+
+      {/* легенда вех для подсказки (не настройки) */}
+      <div className="xptxt" style={{ marginTop: 14, textAlign: 'center' }}>
+        БОНУСЫ СТРИКА: {MILES.map(m => m[0] + ' ДН → +' + m[1] + '⭐').join(' · ')} · РАЗМЕРЫ: {SIZES.map(z => z.l + ' ' + z.cost + '⭐').join(' · ')}
       </div>
     </section>
   );

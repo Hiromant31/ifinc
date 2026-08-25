@@ -4,7 +4,8 @@ import { uid } from './format';
 export const LS_KEY = 'lifequest_v1';
 
 export function freshState(): State {
-  return { balance: 0, xp: 0, intel: 0, skills: [], transactions: [], goals: [], ideas: [] };
+  return { balance: 0, xp: 0, intel: 0, skills: [], transactions: [], goals: [], ideas: [],
+    habits: [], rewards: [], pts: 0, ptLog: [] };
 }
 
 export function normalizeState(d: unknown): State | null {
@@ -15,8 +16,18 @@ export function normalizeState(d: unknown): State | null {
   if (typeof s.xp !== 'number') s.xp = 0;
   if (typeof s.intel !== 'number') s.intel = 0;
   if (!Array.isArray(s.skills)) s.skills = [];
+  // миграция «РОСТ v2»: привычки/награды/баллы
+  if (!Array.isArray(s.habits)) s.habits = [];
+  if (!Array.isArray(s.rewards)) s.rewards = [];
+  if (typeof s.pts !== 'number') s.pts = 0;
+  if (!Array.isArray(s.ptLog)) s.ptLog = [];
   for (const g of s.goals as Goal[]) {
     if (typeof g.cycleDay !== 'number') g.cycleDay = null;
+  }
+  for (const r of s.rewards as { tied?: unknown; unlocked?: unknown; claimed?: unknown }[]) {
+    if (typeof r.unlocked !== 'boolean') r.unlocked = false;
+    if (typeof r.claimed !== 'number') r.claimed = 0;
+    r.tied = r.tied ?? null;
   }
   return s as unknown as State;
 }

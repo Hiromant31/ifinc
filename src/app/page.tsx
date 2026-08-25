@@ -18,10 +18,12 @@ import GoalSheet from '@/components/sheets/GoalSheet';
 import AmountSheet from '@/components/sheets/AmountSheet';
 import AdjustSheet from '@/components/sheets/AdjustSheet';
 import MenuSheet from '@/components/sheets/MenuSheet';
-import { SKILLS } from '@/lib/constants';
+import HabitSheet, { type HabitDraft } from '@/components/sheets/HabitSheet';
+import RewardSheet, { type RewardDraft } from '@/components/sheets/RewardSheet';
+import { LVL_BONUS, MILES, unlockTiedRewards, todayS, yestS } from '@/lib/growth';
 
 type Tab = 'goals' | 'fin' | 'grow';
-type SheetKind = 'tx' | 'goal' | 'amount' | 'adjust' | 'menu' | null;
+type SheetKind = 'tx' | 'goal' | 'amount' | 'adjust' | 'menu' | 'habit' | 'reward' | null;
 
 function levelInfo(xp: number) {
   let lvl = 1, need = 150, rem = xp;
@@ -60,11 +62,21 @@ export default function Page() {
 
   const clone = (s: State): State => JSON.parse(JSON.stringify(s));
 
-  /** добавляет XP с бустом навыков; возвращает true при level up */
+  /** добавляет XP с бустом навыков; при level up капают ⭐ (LVL_BONUS за уровень) */
   function gainXp(s: State, base: number): boolean {
     const before = levelInfo(s.xp).lvl;
     s.xp += Math.round(base * (1 + 0.15 * s.skills.length));
-    return levelInfo(s.xp).lvl > before;
+    const after = levelInfo(s.xp).lvl;
+    if (after > before) {
+      const b = LVL_BONUS * (after - before);
+      s.pts += b;
+      s.ptLog.push({ ts: Date.now(), amt: b });
+      if (s.ptLog.length > 400) s.ptLog = s.ptLog.slice(-400);
+      toast('🎉 LEVEL UP · LVL ' + after + ' · +' + b + '⭐', 'gold');
+      boom(140);
+      return true;
+    }
+    return false;
   }
 
   function checkGoalStatus(s: State, g: Goal) {
@@ -245,7 +257,10 @@ export default function Page() {
         note: 'исполнена: ' + gg.name, ts: Date.now(), virtual: true,
       });
       gainXp(s, 100); boom(220); setShelfOpen(true);
-      toast('🏆 ЦЕЛЬ «' + gg.name + '» ИСПОЛНЕНА! +100 XP · РАСХОД ЗАПИСАН', 'gold');
+      for (const name of unlockTiedRewards(s, gg)) {
+        toast('🎁 «' + name.toUpperCase() + '» РАЗБЛОКИРОВАНА ЦЕЛЬЮ!', 'gold');
+      }
+      toast('🏆 ЦЕЛЬ «' + gg.name + '» ИСПОЛНЕНА · РАСХОД ЗАПИСАН', 'gold');
       return s;
     });
   }
@@ -285,85 +300,90 @@ export default function Page() {
     });
   }
 
-  /* ---------- идеи / навыки ---------- */
-  function addIdea(title: string, reward: number) {
+  /* ---------- привычки и награды (РОСТ v2) ---------- */
+  function earnPts(s: State, n: number) {
+    s.pts += n;
+    s.ptLog.push({ ts: Date.now(), amt: n });
+    if (s.ptLog.length > 400) s.ptLog = s.ptLog.slice(-400);
+  }
+
+  function saveHabit(d: HabitDraft) {
     setState(prev => {
       const s = clone(prev);
-      s.ideas.unshift({ id: uid(), title, reward, success: false, tasks: [] });
+      s.habits.push({
+        id: uid(), name: d.name, effort: d.effort,
+        from: d.from, to: d.to, streak: 0, lastCheck: null, created: Date.now(),
+      });
       gainXp(s, 5);
-      toast('💡 ИДЕЯ ЗАПИСАНА — ПОСТРОЙ ДЕРЕВО ЗАДАЧ', 'green');
+      toast('🔁 ПРИВЫЧКА ДОБАВЛЕНА · ОТМЕЧАЙСЯ РАЗ В ДЕНЬ', 'green');
+      return s;
+    });
+    setSheet(null);
+  }
+
+  function checkHabit(id: string) {
+    setState(prev => {
+      const s = clone(prev);
+      const h = s.habits.find(x => x.id === id);
+      if (!h || h.lastCheck === todayS()) return prev;
+      const st = h.lastCheck === yestS() ? h.streak + 1 : 1;
+      h.streak = st; h.lastCheck = todayS();
+      earnPts(s, h.effort);
+      let msg = '✔ ' + h.name.toUpperCase() + ' +' + h.effort + '⭐';
+      const mile = MILES.find(m => m[0] === st);
+      if (mile) { earnPts(s, mile[1]); msg += ' · 🔥 ' + st + ' ДН +' + mile[1] + '⭐'; boom(60); }
+      gainXp(s, 4);
+      toast(msg, 'green');
       return s;
     });
   }
 
-  function addTask(ideaId: string, text: string) {
+  function deleteHabit(id: string) {
     setState(prev => {
       const s = clone(prev);
-      const it = s.ideas.find(i => i.id === ideaId);
-      if (!it) return prev;
-      it.tasks.push({ id: uid(), text, done: false, pts: 5 });
-      gainXp(s, 3);
+      s.habits = s.habits.filter(x => x.id !== id);
+      toast('ПРИВЫЧКА УДАЛЕНА');
       return s;
     });
   }
 
-  function toggleTask(ideaId: string, taskId: string, done: boolean) {
+  function saveReward(d: RewardDraft) {
+    const costMap = { s: 5, m: 15, l: 40, x: 100 } as const;
     setState(prev => {
       const s = clone(prev);
-      const it = s.ideas.find(i => i.id === ideaId);
-      const t = it?.tasks.find(x => x.id === taskId);
-      if (!it || !t) return prev;
-      t.done = done;
-      if (done) { s.intel += t.pts; gainXp(s, 4); toast('+' + t.pts + ' INT', 'green'); }
-      else s.intel -= t.pts;
+      s.rewards.push({
+        id: uid(), name: d.name, size: d.size, cost: costMap[d.size],
+        tied: d.tied, unlocked: false, claimed: 0,
+      });
+      gainXp(s, 5);
+      toast('🎁 НАГРАДА СОЗДАНА · ' + costMap[d.size] + '⭐', 'green');
+      return s;
+    });
+    setSheet(null);
+  }
+
+  function claimReward(id: string) {
+    setState(prev => {
+      const s = clone(prev);
+      const r = s.rewards.find(x => x.id === id);
+      if (!r) return prev;
+      if (r.unlocked) r.unlocked = false;
+      else {
+        if (s.pts < r.cost) return prev;
+        s.pts -= r.cost;
+      }
+      r.claimed += 1;
+      gainXp(s, 10); boom(120);
+      toast('🎁 «' + r.name.toUpperCase() + '» ПОЛУЧЕНА. ЗАСЛУЖИЛ!', 'gold');
       return s;
     });
   }
 
-  function deleteTask(ideaId: string, taskId: string) {
+  function deleteReward(id: string) {
     setState(prev => {
       const s = clone(prev);
-      const it = s.ideas.find(i => i.id === ideaId);
-      if (!it) return prev;
-      const t = it.tasks.find(x => x.id === taskId);
-      if (t && t.done) s.intel -= t.pts;
-      it.tasks = it.tasks.filter(x => x.id !== taskId);
-      return s;
-    });
-  }
-
-  function ideaSuccess(ideaId: string) {
-    setState(prev => {
-      const s = clone(prev);
-      const it = s.ideas.find(i => i.id === ideaId);
-      if (!it || it.success) return prev;
-      it.success = true;
-      s.intel += it.reward;
-      gainXp(s, 30); boom(90);
-      toast('🧪 ИДЕЯ «' + it.title.toUpperCase() + '» УСПЕШНА! +' + it.reward + ' INT', 'gold');
-      return s;
-    });
-  }
-
-  function deleteIdea(id: string) {
-    setState(prev => {
-      const s = clone(prev);
-      s.ideas = s.ideas.filter(x => x.id !== id);
-      toast('ИДЕЯ УДАЛЕНА');
-      return s;
-    });
-  }
-
-  function buySkill(id: string) {
-    setState(prev => {
-      const s = clone(prev);
-      const sk = SKILLS.find(k => k.id === id);
-      if (!sk || s.skills.includes(id)) return prev;
-      if (s.intel < sk.cost) { toast('НУЖНО INT ' + sk.cost + ' — ВЫПОЛНЯЙ ЗАДАЧИ ИДЕЙ', 'err'); return prev; }
-      s.intel -= sk.cost;
-      s.skills.push(id);
-      gainXp(s, 20); boom(70);
-      toast('🧬 НАВЫК «' + sk.name.toUpperCase() + '» ИЗУЧЕН! БУСТ РАСТЁТ', 'gold');
+      s.rewards = s.rewards.filter(x => x.id !== id);
+      toast('НАГРАДА УДАЛЕНА');
       return s;
     });
   }
@@ -489,13 +509,12 @@ export default function Page() {
       {tab === 'grow' && (
         <GrowthScreen
           state={state}
-          onAddIdea={addIdea}
-          onAddTask={addTask}
-          onToggleTask={toggleTask}
-          onDeleteTask={deleteTask}
-          onIdeaSuccess={ideaSuccess}
-          onDeleteIdea={deleteIdea}
-          onBuySkill={buySkill}
+          onOpenHabit={() => setSheet('habit')}
+          onOpenReward={() => setSheet('reward')}
+          onCheckHabit={checkHabit}
+          onDeleteHabit={deleteHabit}
+          onClaimReward={claimReward}
+          onDeleteReward={deleteReward}
         />
       )}
 
@@ -512,6 +531,8 @@ export default function Page() {
 
       <TxSheet open={sheet === 'tx'} initialType="in" onSubmit={addTx} onClose={() => setSheet(null)} />
       <GoalSheet open={sheet === 'goal'} editGoal={editGoal} onSubmit={saveGoal} onClose={() => { setEditGoal(null); setSheet(null); }} />
+      <HabitSheet open={sheet === 'habit'} onSubmit={saveHabit} onClose={() => setSheet(null)} />
+      <RewardSheet open={sheet === 'reward'} state={state} onSubmit={saveReward} onClose={() => setSheet(null)} />
       <AmountSheet
         open={sheet === 'amount'}
         title={amountModal.title}
