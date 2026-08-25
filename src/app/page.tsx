@@ -49,6 +49,7 @@ export default function Page() {
   const [amountModal, setAmountModal] = useState<{ title: string; btnText: string; preset?: string; cb: (v: number) => boolean }>({ title: '', btnText: 'Ок', cb: () => true });
   const cloudRef = useRef(false);
   const [cloudStatus, setCloudStatus] = useState<'checking' | 'on' | 'off'>('checking');
+  const [lastSync, setLastSync] = useState<'ok' | 'fail' | null>(null);
 
   /* ---------- helpers ---------- */
   const toast = useCallback((msg: string, type?: string) => {
@@ -118,6 +119,7 @@ export default function Page() {
     saveState(state);
     if (cloudRef.current) {
       uploadCloudState(state).then(ok => {
+        setLastSync(ok ? 'ok' : 'fail');
         if (!ok) console.warn('[cloud] sync failed');
       });
     }
@@ -499,8 +501,11 @@ export default function Page() {
 
       <footer>
         {cloudStatus === 'checking' && '☁ ПРОВЕРЯЮ ОБЛАКО…'}
-        {cloudStatus === 'on' && '☁ ОБЛАКО ПОДКЛЮЧЕНО · ДАННЫЕ ОБЩИЕ ДЛЯ ВСЕХ УСТРОЙСТВ'}
+        {cloudStatus === 'on' && '☁ ОБЛАКО ПОДКЛЮЧЕНО'}
         {cloudStatus === 'off' && '⚠ БЕЗ ОБЛАКА · ДАННЫЕ ТОЛЬКО В ЭТОМ БРАУЗЕРЕ'}
+        {cloudStatus === 'on' && lastSync === 'ok' && ' · ✓ ЗАПИСАНО В ОБЛАКО'}
+        {cloudStatus === 'on' && lastSync === 'fail' && ' · ⚠ ОШИБКА ЗАПИСИ В ОБЛАКО — НАЖМИ МЕНЮ → СИНХРОНИЗИРОВАТЬ'}
+        {cloudStatus === 'on' && lastSync === null && ' · ЖДУ ПЕРВОЕ ИЗМЕНЕНИЕ ДЛЯ СИНХРОНИЗАЦИИ'}
       </footer>
 
       <BottomNav tab={tab} onSelect={setTab} />
@@ -525,6 +530,7 @@ export default function Page() {
         onSyncNow={() => {
           if (!cloudRef.current) { toast('⚠ ОБЛАКО НЕДОСТУПНО', 'err'); return; }
           uploadCloudState(state).then(ok => {
+            setLastSync(ok ? 'ok' : 'fail');
             toast(ok ? '☁ ДАННЫЕ ОТПРАВЛЕНЫ В ОБЛАКО' : '⚠ НЕ УДАЛОСЬ ОТПРАВИТЬ В ОБЛАКО', ok ? 'green' : 'err');
           });
         }}
