@@ -86,16 +86,19 @@ export default function Page() {
 
     fetchCloudState().then(({ ok, empty, state: cloud }) => {
       if (!ok) return;
+      // облако доступно — включаем автосохранение в него
+      cloudRef.current = true;
       if (!empty && cloud) {
         const norm = normalizeState(cloud);
         if (norm) {
-          const loc = loadState();
           // облако главнее локальных данных
           setState(norm);
           saveState(norm);
           toast('☁ ДАННЫЕ ЗАГРУЖЕНЫ ИЗ ОБЛАКА', 'green');
-          void loc;
         }
+      } else if (empty && local) {
+        // в облаке пусто, а локально данные есть — заливаем их туда
+        uploadCloudState(local);
       }
     });
 
