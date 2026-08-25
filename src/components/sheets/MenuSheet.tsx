@@ -8,6 +8,7 @@ interface Props {
   onExportTx: () => void;
   onExportGoals: () => void;
   onReset: () => void;
+  onSyncNow: () => void;
   onClose: () => void;
 }
 
@@ -16,6 +17,9 @@ export default function MenuSheet(p: Props) {
     <Sheet open={p.open} ovId="ovMenu" id="sheetMenu" onClose={p.onClose}>
       <h3>Меню</h3>
       <div className="menu-list">
+        <button type="button" onClick={p.onSyncNow}>
+          <span>☁ СИНХРОНИЗИРОВАТЬ СЕЙЧАС</span><span>→</span>
+        </button>
         <button type="button" onClick={() => { p.onClose(); p.onAdjust(); }}>
           <span>⚖ СВЕРИТЬ БАЛАНС</span><span>→</span>
         </button>

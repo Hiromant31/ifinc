@@ -48,6 +48,7 @@ export default function Page() {
   const [editGoal, setEditGoal] = useState<Goal | null>(null);
   const [amountModal, setAmountModal] = useState<{ title: string; btnText: string; preset?: string; cb: (v: number) => boolean }>({ title: '', btnText: 'Ок', cb: () => true });
   const cloudRef = useRef(false);
+  const [cloudStatus, setCloudStatus] = useState<'checking' | 'on' | 'off'>('checking');
 
   /* ---------- helpers ---------- */
   const toast = useCallback((msg: string, type?: string) => {
@@ -85,9 +86,14 @@ export default function Page() {
     setBooted(true);
 
     fetchCloudState().then(({ ok, empty, state: cloud }) => {
-      if (!ok) return;
+      if (!ok) {
+        setCloudStatus('off');
+        toast('⚠ ОБЛАКО НЕДОСТУПНО — ДАННЫЕ ТОЛЬКО В ЭТОМ БРАУЗЕРЕ', 'err');
+        return;
+      }
       // облако доступно — включаем автосохранение в него
       cloudRef.current = true;
+      setCloudStatus('on');
       if (!empty && cloud) {
         const norm = normalizeState(cloud);
         if (norm) {
@@ -491,7 +497,11 @@ export default function Page() {
         />
       )}
 
-      <footer>LIFEQUEST · ДАННЫЕ ЛОКАЛЬНО{cloudRef.current ? ' · ОБЛАКО ПОДКЛЮЧЕНО' : ''}</footer>
+      <footer>
+        {cloudStatus === 'checking' && '☁ ПРОВЕРЯЮ ОБЛАКО…'}
+        {cloudStatus === 'on' && '☁ ОБЛАКО ПОДКЛЮЧЕНО · ДАННЫЕ ОБЩИЕ ДЛЯ ВСЕХ УСТРОЙСТВ'}
+        {cloudStatus === 'off' && '⚠ БЕЗ ОБЛАКА · ДАННЫЕ ТОЛЬКО В ЭТОМ БРАУЗЕРЕ'}
+      </footer>
 
       <BottomNav tab={tab} onSelect={setTab} />
 
@@ -512,6 +522,12 @@ export default function Page() {
         onExportTx={exportTx}
         onExportGoals={exportGoals}
         onReset={resetProgress}
+        onSyncNow={() => {
+          if (!cloudRef.current) { toast('⚠ ОБЛАКО НЕДОСТУПНО', 'err'); return; }
+          uploadCloudState(state).then(ok => {
+            toast(ok ? '☁ ДАННЫЕ ОТПРАВЛЕНЫ В ОБЛАКО' : '⚠ НЕ УДАЛОСЬ ОТПРАВИТЬ В ОБЛАКО', ok ? 'green' : 'err');
+          });
+        }}
         onClose={() => setSheet(null)}
       />
 
