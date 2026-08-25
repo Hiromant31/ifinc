@@ -26,6 +26,7 @@ export async function PUT(request: NextRequest) {
       access: 'private',
       contentType: 'application/json',
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
 
     return NextResponse.json({ ok: true });
