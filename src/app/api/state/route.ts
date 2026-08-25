@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put, list, getDownloadUrl } from '@vercel/blob';
+import { put, get } from '@vercel/blob';
 
 const PATHNAME = 'state.json';
 
@@ -7,7 +7,8 @@ const PATHNAME = 'state.json';
 export const dynamic = 'force-dynamic';
 
 /**
- * PUT /api/state — upload state to Vercel Blob
+ * PUT /api/state — записать состояние в приватный Blob store.
+ * Файл создаётся при первой записи и перезаписывается дальше.
  */
 export async function PUT(request: NextRequest) {
   try {
@@ -21,13 +22,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     }
 
-    const blob = await put(PATHNAME, body, {
-      access: 'public',
+    await put(PATHNAME, body, {
+      access: 'private',
       contentType: 'application/json',
       addRandomSuffix: false,
     });
 
-    return NextResponse.json({ ok: true, url: blob.url });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Blob PUT error:', err);
     return NextResponse.json(
@@ -38,29 +39,32 @@ export async function PUT(request: NextRequest) {
 }
 
 /**
- * GET /api/state — download state from Vercel Blob
+ * GET /api/state — прочитать состояние из приватного Blob store.
+ * Файла нет → 404 (клиент считает облако пустым и заливает локальные данные).
  */
 export async function GET() {
   try {
-    // Find latest blob with our pathname
-    const listed = await list({ prefix: PATHNAME, limit: 1 });
-    if (!listed.blobs.length) {
+    const result = await get(PATHNAME, {
+      access: 'private',
+      useCache: false, // всегда свежая версия, без кэша CDN
+    });
+
+    if (!result || result.statusCode !== 200) {
       return NextResponse.json({ error: 'No state yet' }, { status: 404 });
     }
 
-    const downloadUrl = getDownloadUrl(listed.blobs[0].url);
-    const response = await fetch(downloadUrl);
-    if (!response.ok) {
-      return NextResponse.json({ error: 'Failed to fetch blob content' }, { status: 500 });
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
+    const text = await new Response(result.stream).text();
+    const data = JSON.parse(text);
+    return NextResponse.json(data, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   } catch (err) {
+    // BlobNotFoundError тоже приходит ошибкой — это норма для пустого хранилища
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('not found') || msg.includes('NotFound')) {
+      return NextResponse.json({ error: 'No state yet' }, { status: 404 });
+    }
     console.error('Blob GET error:', err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Blob download failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
